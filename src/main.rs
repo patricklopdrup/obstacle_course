@@ -1,3 +1,5 @@
+use std::collections::{HashMap};
+
 
 fn main() {
 
@@ -22,18 +24,19 @@ struct Zone {
     x: i32,
     y: i32,
     restriction: Restriction,
+    is_end_zone: bool,
 }
 
 impl Zone {
     fn new(x: i32, y: i32, restriction: Restriction) -> Self {
-        Self { x, y, restriction }
+        Self { x, y, restriction, is_end_zone: false }
     }
     
-    fn get_furthest_away(&self, zones: &Vec<Zone>) -> Zone {
+    fn bungee_slingshow_o2(&self, zones: &Vec<Zone>) -> Zone {
         let default_zone = Zone::default();
         let mut result: &Zone = &default_zone;
-        let mut max_dist: f64 = f64::MIN;
-        let mut cur_dist: f64;
+        let mut max_dist: f32 = f32::MIN;
+        let mut cur_dist: f32;
         for zone in zones {
             cur_dist = self.get_euclidian_distance(&zone);
             if cur_dist > max_dist {
@@ -45,8 +48,8 @@ impl Zone {
         *result
     }
 
-    fn get_euclidian_distance(&self, other: &Zone) -> f64 {
-        (((self.x - other.x).pow(2) + (self.y - other.y).pow(2)) as f64).sqrt()
+    fn get_euclidian_distance(&self, other: &Zone) -> f32 {
+        (((self.x - other.x).pow(2) + (self.y - other.y).pow(2)) as f32).sqrt()
     }
 
     fn climbing_wall_o1(&self, zones: &Vec<Zone>) -> Vec<Zone> {
@@ -69,11 +72,46 @@ impl Zone {
         self.x == other.x
     }
 
+    fn salmon_ladder_slide_o3(&self, zones: &Vec<Zone>) -> Vec<Zone> {
+        let mut result: Vec<Zone> = Vec::with_capacity(zones.len());
+        let mut candidates: HashMap<String, Vec<&Zone>> = HashMap::new();
+        let mut cur_slope_value_round: String;
+        for zone in zones {
+            cur_slope_value_round = get_hash_key_from_f32(self.get_slope_value(zone));
+
+            candidates.entry(cur_slope_value_round)
+                .or_insert(Vec::new())
+                .push(zone);
+        }
+
+        for (key, val) in candidates.iter() {
+            if val.len() < 3 {
+                continue;
+            }
+            self.get_zones_after_two_zone_on_same_line(val, &mut result);
+        }
+
+        result
+    }
+
+    fn get_zones_after_two_zone_on_same_line(&self, zones: &Vec<&Zone>, result: &mut Vec<Zone>) {
+        // TODO: make this method
+    }
+
+    fn get_slope_value(&self, other: &Zone) -> f32 {
+        (other.y - self.y).abs() as f32 / (other.x - self.x).abs() as f32
+    }
+
+
+}
+
+fn get_hash_key_from_f32(float_val: f32) -> String {
+    let round = (float_val * 1000.0).round() / 1000.0;
+    round.to_string()
 }
 
 // maybe optimize with return &[Zone] and using lifetimes
 fn construct_zones_for_test(size: usize, lines: &[&str]) -> Vec<Zone> {
-    let input_size: usize = 6; // x,y + 4 restrictions
     let mut zones: Vec<Zone> = Vec::with_capacity(size);
     let mut split_line;
     let mut restriction: Restriction;
@@ -92,6 +130,8 @@ fn construct_zones_for_test(size: usize, lines: &[&str]) -> Vec<Zone> {
         zones.push(cur_zone);
     }
 
+    zones[size-1].is_end_zone = true;
+
     zones
 }
 
@@ -106,21 +146,21 @@ mod tests {
     fn euclidian_dist_horizontal() {
         let zone1 = Zone::new(0,0, Restriction::default());
         let zone2 = Zone::new(0,5, Restriction::default());
-        assert_eq!(zone1.get_euclidian_distance(&zone2), 5f64);
+        assert_eq!(zone1.get_euclidian_distance(&zone2), 5f32);
     }
 
     #[test]
     fn euclidian_dist_vertical() {
         let zone1 = Zone::new(3,0, Restriction::default());
         let zone2 = Zone::new(0,0, Restriction::default());
-        assert_eq!(zone1.get_euclidian_distance(&zone2), 3f64);
+        assert_eq!(zone1.get_euclidian_distance(&zone2), 3f32);
     }
 
     #[test]
     fn euclidian_dist_diagonal() {
         let zone1 = Zone::new(0,0, Restriction::default());
         let zone2 = Zone::new(2,4, Restriction::default());
-        let dist_round_2_decimal = (zone1.get_euclidian_distance(&zone2) * 100f64).round() / 100f64;
+        let dist_round_2_decimal = (zone1.get_euclidian_distance(&zone2) * 100f32).round() / 100f32;
         assert_eq!(dist_round_2_decimal, 4.47);
     }
 
@@ -133,7 +173,7 @@ mod tests {
             Zone::new(3, 4, Restriction::default()),
             zone_furthest_away,
         ];
-        assert_eq!(cur_zone.get_furthest_away(&zones), zone_furthest_away);
+        assert_eq!(cur_zone.bungee_slingshow_o2(&zones), zone_furthest_away);
     }
 
     #[test]
@@ -151,7 +191,7 @@ mod tests {
         ];
         let actual = construct_zones_for_test(size, &input);
 
-        let expected = vec![
+        let mut expected = vec![
             Zone::new(0, 1, Restriction::new(4, 0, 2, 0)),
             Zone::new(2, 2, Restriction::new(1, 2, 3, 4)),
             Zone::new(4, 1, Restriction::new(3, 1, 1, 0)),
@@ -161,7 +201,10 @@ mod tests {
             Zone::new(9, 4, Restriction::new(2, 0, 0, 1)),
             Zone::new(9, 3, Restriction::new(0, 0, 0, 0)),
         ];
+        expected[size-1].is_end_zone = true;
+
         assert_eq!(actual, expected);
+        assert_eq!(actual.last().expect("not empty").is_end_zone, true);
     }
 
     #[test]
@@ -180,6 +223,22 @@ mod tests {
             Zone::new(2, 5, Restriction::default()),
         ];
         assert_eq!(cur_zone.climbing_wall_o1(&zones), correct_zones);
+    }
+
+    #[test]
+    fn o3_salmon_ladder_slide_slope_eq_2() {
+        let cur_zone = Zone::new(2, 2, Restriction::default());
+
+        let mut zones = vec![
+            Zone::new(3, 4, Restriction::default()),
+            Zone::new(4, 6, Restriction::default()),
+            Zone::new(3, 3, Restriction::default()), // not on line
+        ];
+        let two_zones_away = Zone::new(5, 8, Restriction::default());
+        zones.push(two_zones_away);
+
+        let actual = cur_zone.salmon_ladder_slide_o3(&zones);
+        assert_eq!(actual, vec![two_zones_away]);
     }
 
 }
