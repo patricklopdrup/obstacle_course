@@ -31,6 +31,11 @@ impl Zone {
     fn new(x: i32, y: i32, restriction: Restriction) -> Self {
         Self { x, y, restriction, is_end_zone: false }
     }
+
+    fn get_length_from_origin(&self) -> f32 {
+        let origin: Zone = Zone::new(0, 0, Restriction::default());
+        self.get_euclidian_distance(&origin)
+    }
     
     fn bungee_slingshow_o2(&self, zones: &Vec<Zone>) -> Zone {
         let default_zone = Zone::default();
@@ -74,17 +79,17 @@ impl Zone {
 
     fn salmon_ladder_slide_o3(&self, zones: &Vec<Zone>) -> Vec<Zone> {
         let mut result: Vec<Zone> = Vec::with_capacity(zones.len());
-        let mut candidates: HashMap<String, Vec<&Zone>> = HashMap::new();
-        let mut cur_slope_value_round: String;
+        let mut candidates: HashMap<u32, Vec<Zone>> = HashMap::new();
+        let mut cur_slope_value_round: u32;
         for zone in zones {
             cur_slope_value_round = get_hash_key_from_f32(self.get_slope_value(zone));
 
             candidates.entry(cur_slope_value_round)
                 .or_insert(Vec::new())
-                .push(zone);
+                .push(*zone);
         }
 
-        for (key, val) in candidates.iter() {
+        for (key, val) in candidates.iter_mut() {
             if val.len() < 3 {
                 continue;
             }
@@ -94,21 +99,62 @@ impl Zone {
         result
     }
 
-    fn get_zones_after_two_zone_on_same_line(&self, zones: &Vec<&Zone>, result: &mut Vec<Zone>) {
+    fn get_zones_after_two_zone_on_same_line(&self, zones: &Vec<Zone>, result: &mut Vec<Zone>) {
         // TODO: make this method
+        // Sort zones
+        let mut sorted_zones: Vec<Zone> = Vec::new();
+        zones.clone_into(&mut sorted_zones);
+        if is_line_vertical(&sorted_zones) {
+            sorted_zones.sort_unstable_by_key(|v| v.y);
+        } else {
+            sorted_zones.sort_unstable_by_key(|v| v.x);
+        }
+        
+        // Get index of self in sorted array
+        let self_index: usize;
+        for (i, zone) in sorted_zones.iter().enumerate() {
+            if self.x == zone.x && self.y == zone.y {
+                self_index = i;
+                break;
+            }
+        }
+
+        // return other zones if 2 before or after self_index
     }
 
     fn get_slope_value(&self, other: &Zone) -> f32 {
         (other.y - self.y).abs() as f32 / (other.x - self.x).abs() as f32
     }
 
-
 }
 
-fn get_hash_key_from_f32(float_val: f32) -> String {
-    let round = (float_val * 1000.0).round() / 1000.0;
-    round.to_string()
+fn get_hash_key_from_f32(float_val: f32) -> u32 {
+    (float_val * 100_000.0) as u32
 }
+
+fn is_line_vertical(zones: &Vec<Zone>) -> bool {
+    let x_val = zones[0].x;
+    for zone in zones {
+        if zone.x != x_val {
+            return false;
+        }
+    }
+    true
+}
+
+fn is_line_horizontal(zones: &Vec<Zone>) -> bool {
+    let y_val = zones[0].y;
+    for zone in zones {
+        if zone.y != y_val {
+            return false;
+        }
+    }
+    true
+}
+
+// fn sort_zones(zones: &Vec<Zone>) -> Vec<Zone> {
+
+// }
 
 // maybe optimize with return &[Zone] and using lifetimes
 fn construct_zones_for_test(size: usize, lines: &[&str]) -> Vec<Zone> {
@@ -223,6 +269,12 @@ mod tests {
             Zone::new(2, 5, Restriction::default()),
         ];
         assert_eq!(cur_zone.climbing_wall_o1(&zones), correct_zones);
+    }
+
+    #[test]
+    fn hash_key_test() {
+        let float_key = 12.3456789;
+        assert_eq!(get_hash_key_from_f32(float_key), 1234567);
     }
 
     #[test]
